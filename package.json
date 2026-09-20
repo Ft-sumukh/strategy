@@ -1,0 +1,26 @@
+{
+  "name": "aegis-invest",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AI-assisted, risk-aware financial investment decision-intelligence platform",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:web": "npm run dev --workspace=apps/web",
+    "build:web": "npm run build --workspace=apps/web",
+    "test:web": "npm run test --workspace=apps/web",
+    "lint:web": "npm run lint --workspace=apps/web",
+    "typecheck:web": "npm run typecheck --workspace=apps/web"
+  },
+  "keywords": [
+    "financial-intelligence",
+    "risk-aware",
+    "quantitative-finance",
+    "portfolio-management",
+    "investment-decision-support"
+  ],
+  "author": "AEGIS INVEST Engineering Team",
+  "license": "Apache-2.0"
+}

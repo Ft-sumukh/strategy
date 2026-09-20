@@ -1,13 +1,136 @@
+version: '3.8'
+
 services:
+  # ============================================================================
+  # Database Service — PostgreSQL
+  # ============================================================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: aegis-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-aegis_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-aegis_password}
+      POSTGRES_DB: ${POSTGRES_DB:-aegis_db}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - aegis_postgres_data:/var/lib/postgresql/data
+      - ./infrastructure/database/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-aegis_user} -d ${POSTGRES_DB:-aegis_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - aegis-network
+
+  # ============================================================================
+  # Cache & Broker Service — Redis
+  # ============================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: aegis-redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - aegis_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    networks:
+      - aegis-network
+
+  # ============================================================================
+  # Backend Service — FastAPI API Server
+  # ============================================================================
   api:
-    build: ./backend
+    build:
+      context: .
+      dockerfile: infrastructure/docker/Dockerfile.api
+    container_name: aegis-api
+    restart: unless-stopped
+    environment:
+      APP_NAME: aegis-invest
+      APP_ENV: development
+      APP_VERSION: 0.1.0
+      DEBUG: "true"
+      LOG_LEVEL: INFO
+      LOG_FORMAT: json
+      API_HOST: 0.0.0.0
+      API_PORT: 8000
+      API_V1_PREFIX: /api/v1
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-aegis_user}:${POSTGRES_PASSWORD:-aegis_password}@postgres:5432/${POSTGRES_DB:-aegis_db}
+      REDIS_ENABLED: "true"
+      REDIS_URL: redis://redis:6379/0
+      CORS_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
+      SECRET_KEY: ${SECRET_KEY:-container-development-secret-key-32-chars-minimum}
     ports:
       - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/api/v1/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    volumes:
+      - ./apps/api:/app/apps/api
+    networks:
+      - aegis-network
+
+  # ============================================================================
+  # Frontend Service — Next.js Application
+  # ============================================================================
   web:
-    build: ./frontend
+    build:
+      context: .
+      dockerfile: infrastructure/docker/Dockerfile.web
+    container_name: aegis-web
+    restart: unless-stopped
+    environment:
+      NEXT_PUBLIC_APP_NAME: "AEGIS INVEST"
+      NEXT_PUBLIC_APP_VERSION: "0.1.0"
+      NEXT_PUBLIC_APP_ENV: "development"
+      NEXT_PUBLIC_API_BASE_URL: "http://localhost:8000/api/v1"
+      NODE_ENV: development
     ports:
       - "3000:3000"
-    environment:
-      NEXT_PUBLIC_API_URL: http://localhost:8000
     depends_on:
-      - api
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3000 || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    volumes:
+      - ./apps/web:/app/apps/web
+      - /app/apps/web/node_modules
+      - /app/apps/web/.next
+    networks:
+      - aegis-network
+
+# ==============================================================================
+# Persistent Volumes & Networks
+# ==============================================================================
+volumes:
+  aegis_postgres_data:
+    name: aegis_postgres_data
+  aegis_redis_data:
+    name: aegis_redis_data
+
+networks:
+  aegis-network:
+    name: aegis-network
+    driver: bridge

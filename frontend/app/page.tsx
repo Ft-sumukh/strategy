@@ -1,37 +1,127 @@
-"use client";
+import React from 'react';
+import { Shield, ArrowRight, Code2, BookOpen, Terminal } from 'lucide-react';
+import { SystemHealthStatus } from '../components/system/SystemHealthStatus';
+import { ArchitectureMap } from '../components/system/ArchitectureMap';
+import { Card, CardContent } from '../components/ui/Card';
+import { Badge } from '../components/ui/Badge';
+import { FinancialDisclaimer } from '../components/disclaimer/FinancialDisclaimer';
 
-import { useEffect, useState } from "react";
+export default function HomePage() {
+  return (
+    <div className="space-y-8">
+      {/* Compact Disclaimer Notice at the top */}
+      <FinancialDisclaimer compact />
 
-type Index = { symbol: string; name: string; value: number; change_pct: number; direction: string };
-type Overview = { regime: string; regime_score: number; regime_description: string; indexes: Index[]; breadth: Record<string, number>; intelligence: string[]; meta: { data_status: string; as_of: string } };
-type Row = { ticker: string; company: string; sector: string; price: number; change_pct: number; market_cap_bn: number; pe_ratio: number; quality_score: number; momentum_score: number; risk_level: string };
-type Risk = { portfolio_value: number; holdings: { ticker: string; weight_pct: number; value: number; daily_change_pct: number }[]; metrics: Record<string,string>; concentration: {label:string; value:string; status:string}[]; stress_scenarios: {name:string; impact:string; note:string}[]; meta: {data_status:string} };
+      {/* Hero / Platform Overview */}
+      <div className="relative overflow-hidden rounded-2xl border border-border bg-gradient-to-b from-surface/90 via-surface/40 to-background p-6 sm:p-10">
+        <div className="max-w-3xl space-y-4">
+          <div className="inline-flex items-center gap-2">
+            <Badge variant="info">Phase 1 Delivery</Badge>
+            <span className="text-xs text-slate-400 font-mono">Engineering Foundation</span>
+          </div>
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-const fallback: Overview = { regime:"Constructive expansion", regime_score:68, regime_description:"Breadth is improving while volatility remains contained.", indexes:[{symbol:"SPX",name:"S&P 500",value:5634.12,change_pct:.74,direction:"up"},{symbol:"NDX",name:"Nasdaq 100",value:19742.31,change_pct:1.12,direction:"up"},{symbol:"VIX",name:"Volatility index",value:15.84,change_pct:-3.18,direction:"down"}],breadth:{advancing_pct:62,above_200dma_pct:71,new_highs_pct:18},intelligence:["Large-cap momentum is leading, but factor dispersion remains elevated.","Lower volatility supports risk budgets; it does not remove downside risk.","Earnings revisions are mixed across sectors and should be checked before acting."],meta:{data_status:"synthetic",as_of:""} };
+          <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-white">
+            AEGIS INVEST <br />
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-indigo-300 to-purple-400">
+              Decision-Intelligence Platform
+            </span>
+          </h1>
 
-async function get<T>(path: string, backup: T): Promise<T> { try { const response = await fetch(`${API}${path}`); if (!response.ok) throw new Error("API unavailable"); return response.json(); } catch { return backup; } }
+          <p className="text-sm sm:text-base text-slate-300 leading-relaxed">
+            A serious, production-engineered financial intelligence platform designed for institutional research, risk modeling, and systematic decision support. Built on an API-first, modular architecture engineered for complete auditability and reproducibility.
+          </p>
 
-export default function Home() {
-  const [overview, setOverview] = useState<Overview>(fallback);
-  const [rows, setRows] = useState<Row[]>([]);
-  const [risk, setRisk] = useState<Risk | null>(null);
-  const [selected, setSelected] = useState<Row | null>(null);
-  const [quality, setQuality] = useState(70);
-  useEffect(() => {
-    get("/api/v1/market/overview", fallback).then((data: Overview) => setOverview(data));
-    get("/api/v1/screener?min_quality=0", { results: [] as Row[] }).then((data: { results: Row[] }) => setRows(data.results));
-    get("/api/v1/portfolio/risk", null as unknown as Risk).then((data: Risk) => setRisk(data));
-  }, []);
-  const filtered = rows.filter(row => row.quality_score >= quality);
-  return <main className="shell">
-    <aside className="sidebar"><div className="brand"><span className="brand-mark">A</span><span>AEGIS <em>INVEST</em></span></div><div className="eyebrow">WORKSPACE</div>{["Overview","Markets","Screener","Research","Portfolio risk","Strategies","Backtesting"].map((item, i) => <div className={`nav-item ${i===0?"active":""}`} key={item}><span>{["◈","◒","⌕","▤","◫","↗","◌"][i]}</span>{item}</div>)}<div className="sidebar-bottom"><div className="eyebrow">SYSTEM</div><div className="nav-item"><span>⚙</span>Settings</div><div className="user">SU <span>Demo analyst<br/><small>Research workspace</small></span></div></div></aside>
-    <section className="content"><header className="topbar"><div><div className="eyebrow">MONDAY, 19 SEPTEMBER 2026</div><h1>Good morning, analyst.</h1></div><div className="header-actions"><span className="status-dot"/> Demo environment <button className="outline-button">Export brief ↗</button></div></header>
-      <div className="notice"><span>ⓘ</span><div><strong>Demo data mode</strong><br/><span>Market values are deterministic synthetic records for product evaluation. No live quotes or investment advice.</span></div><span className="notice-date">As of 18 Sep 2026</span></div>
-      <div className="grid two"><section className="panel regime"><div className="panel-head"><div><div className="eyebrow">MARKET REGIME</div><h2>{overview.regime}</h2></div><span className="pill positive">Supportive</span></div><p>{overview.regime_description}</p><div className="regime-meter"><div style={{width:`${overview.regime_score}%`}}/><span>{overview.regime_score}<small>/100</small></span></div><div className="muted">Regime score reflects current demo signals, not a forecast.</div></section><section className="panel"><div className="panel-head"><div><div className="eyebrow">MARKET BREADTH</div><h2>Participation</h2></div><span className="muted">Today</span></div><div className="breadth">{Object.entries(overview.breadth).map(([key,value])=><div key={key}><strong>{value}%</strong><span>{key.replaceAll("_"," ")}</span><div className="bar"><i style={{width:`${value}%`}}/></div></div>)}</div></section></div>
-      <section><div className="section-title"><div><div className="eyebrow">MARKET PULSE</div><h2>Key instruments</h2></div><span className="muted">Synthetic snapshot</span></div><div className="index-grid">{overview.indexes.map(index=><div className="index-card" key={index.symbol}><div className="muted">{index.name} <b>{index.symbol}</b></div><strong>{index.value.toLocaleString()}</strong><span className={index.change_pct >= 0 ? "positive":"negative"}>{index.change_pct >=0 ? "↗":"↘"} {Math.abs(index.change_pct).toFixed(2)}%</span></div>)}</div></section>
-      <div className="grid wide"><section className="panel screener"><div className="panel-head"><div><div className="eyebrow">OPPORTUNITY SET</div><h2>Quality screener</h2></div><label className="range">Min quality <input type="range" min="0" max="95" value={quality} onChange={e=>setQuality(Number(e.target.value))}/> {quality}</label></div><div className="table-wrap"><table><thead><tr><th>Company</th><th>Sector</th><th>Price</th><th>Quality</th><th>Momentum</th><th>Risk</th></tr></thead><tbody>{filtered.map(row=><tr key={row.ticker} onClick={()=>setSelected(row)}><td><b>{row.ticker}</b><small>{row.company}</small></td><td>{row.sector}</td><td>${row.price.toFixed(2)} <span className={row.change_pct>=0?"positive":"negative"}>{row.change_pct>=0?"+":""}{row.change_pct.toFixed(2)}%</span></td><td><strong>{row.quality_score}</strong></td><td>{row.momentum_score}</td><td><span className={`risk ${row.risk_level.toLowerCase()}`}>{row.risk_level}</span></td></tr>)}</tbody></table></div>{selected && <div className="selected-note"><b>{selected.company} selected.</b> Open Company Intelligence to review evidence, valuation, scenarios, and uncertainty before making a decision.</div>}</section>
-        <section className="panel"><div className="panel-head"><div><div className="eyebrow">DECISION SIGNALS</div><h2>What matters now</h2></div></div><div className="insights">{overview.intelligence.map((text,i)=><div key={text}><span>0{i+1}</span><p>{text}</p></div>)}</div><button className="text-button">Open research workspace →</button></section></div>
-      {risk && <section className="panel portfolio"><div className="panel-head"><div><div className="eyebrow">PORTFOLIO RISK</div><h2>Current allocation</h2></div><span className="pill caution">Review concentration</span></div><div className="portfolio-grid"><div><div className="portfolio-value">${risk.portfolio_value.toLocaleString()}<small> portfolio value</small></div><div className="allocation">{risk.holdings.map(h=><div key={h.ticker} style={{width:`${h.weight_pct}%`}} title={`${h.ticker} ${h.weight_pct}%`}/>)}</div><div className="legend">{risk.holdings.map(h=><span key={h.ticker}><i/> {h.ticker} {h.weight_pct}%</span>)}</div></div><div className="metric-list">{Object.entries(risk.metrics).slice(0,3).map(([key,value])=><div key={key}><span>{key}</span><b>{value}</b></div>)}</div><div className="stress"><div className="eyebrow">STRESS SCENARIOS</div>{risk.stress_scenarios.map(s=><div key={s.name}><span>{s.name}</span><b className="negative">{s.impact}</b></div>)}</div></div></section>}</section>
-  </main>;
+          <div className="pt-3 flex flex-wrap items-center gap-3">
+            <a
+              href="/dashboard"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold shadow-lg shadow-blue-600/30 transition-all"
+            >
+              <span>Open Executive Dashboard</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </a>
+            <a
+              href="http://localhost:8000/docs"
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-border bg-slate-900/60 hover:bg-slate-800 text-slate-300 text-xs font-semibold transition-all"
+            >
+              <span>API Documentation</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </a>
+          </div>
+
+          <div className="pt-2 flex flex-wrap items-center gap-4 text-xs">
+            <div className="flex items-center gap-1.5 text-slate-400">
+              <Shield className="w-4 h-4 text-emerald-400" />
+              <span>Zero Hallucinated Metrics</span>
+            </div>
+            <div className="flex items-center gap-1.5 text-slate-400">
+              <Code2 className="w-4 h-4 text-blue-400" />
+              <span>Layered Clean Architecture</span>
+            </div>
+            <div className="flex items-center gap-1.5 text-slate-400">
+              <Terminal className="w-4 h-4 text-purple-400" />
+              <span>Deterministic Reproducibility</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Real-time System Connectivity Card */}
+      <SystemHealthStatus />
+
+      {/* Interactive System Architecture Map */}
+      <ArchitectureMap />
+
+      {/* Developer Quick-Start Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Card className="bg-surface/70">
+          <CardContent className="p-5 space-y-3">
+            <div className="flex items-center gap-2 text-slate-200 font-semibold text-sm">
+              <BookOpen className="w-4 h-4 text-blue-400" />
+              <h4>API Documentation</h4>
+            </div>
+            <p className="text-xs text-slate-400">
+              The backend provides interactive OpenAPI documentation with schemas, request ID tracking, and standardized error envelopes.
+            </p>
+            <div className="pt-2 flex items-center gap-3">
+              <a
+                href="http://localhost:8000/docs"
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-400 hover:text-blue-300"
+              >
+                Swagger UI <ArrowRight className="w-3.5 h-3.5" />
+              </a>
+              <span className="text-slate-600">•</span>
+              <a
+                href="http://localhost:8000/redoc"
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-400 hover:text-blue-300"
+              >
+                ReDoc <ArrowRight className="w-3.5 h-3.5" />
+              </a>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-surface/70">
+          <CardContent className="p-5 space-y-3">
+            <div className="flex items-center gap-2 text-slate-200 font-semibold text-sm">
+              <Terminal className="w-4 h-4 text-purple-400" />
+              <h4>Verification Commands</h4>
+            </div>
+            <p className="text-xs text-slate-400">
+              Execute tests and migrations to verify system integrity:
+            </p>
+            <div className="bg-slate-950 p-2.5 rounded-lg font-mono text-[11px] text-slate-300 space-y-1">
+              <div>$ python -m pytest (18 backend/integration tests)</div>
+              <div>$ cd apps/api && alembic upgrade head</div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
 }

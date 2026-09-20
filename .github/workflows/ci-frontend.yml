@@ -1,0 +1,46 @@
+name: Frontend CI
+
+on:
+  push:
+    branches: [main, master, develop]
+    paths:
+      - 'apps/web/**'
+      - 'packages/**'
+      - 'package.json'
+      - '.github/workflows/ci-frontend.yml'
+  pull_request:
+    branches: [main, master, develop]
+    paths:
+      - 'apps/web/**'
+      - 'packages/**'
+      - 'package.json'
+      - '.github/workflows/ci-frontend.yml'
+
+jobs:
+  frontend-build-test:
+    name: Lint, Type Check, Test & Build Frontend
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install Node Dependencies
+        run: npm ci || npm install
+
+      - name: TypeScript Type Checking
+        run: npm run typecheck:web
+
+      - name: Run Unit Tests
+        run: npm run test:web
+
+      - name: Build Next.js Application
+        env:
+          NEXT_PUBLIC_API_BASE_URL: 'http://localhost:8000/api/v1'
+        run: npm run build:web

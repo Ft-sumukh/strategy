@@ -1,35 +1,115 @@
-from fastapi import FastAPI, Query
-from fastapi.middleware.cors import CORSMiddleware
+"""
+AEGIS INVEST — Main Application Entrypoint & Factory
+Bootstraps FastAPI, configures lifecycle management, registers middlewares,
+exception handlers, and mounts versioned API routes.
+"""
 
-from app.models import MarketOverview, PortfolioRisk, ScreenerResponse, StockProfile
-from app.providers.demo import market_overview, portfolio_risk, screener, stock
+from contextlib import asynccontextmanager
+from typing import AsyncGenerator
+from fastapi import FastAPI
+from fastapi.responses import JSONResponse
 
-app = FastAPI(title="Aegis Invest API", version="0.1.0", description="Decision-intelligence demo API. Data is synthetic unless a provider response says otherwise.")
-app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:3000"], allow_methods=["*"], allow_headers=["*"])
+from app.api.v1.router import api_v1_router
+from app.core.config import get_settings
+from app.core.errors import register_exception_handlers
+from app.core.logging import get_logger, setup_logging
+from app.core.security import SecurityHeadersMiddleware, configure_cors
+from app.db.base import Base
+from app.db.session import check_db_connectivity, engine
+from app.middleware.logging_middleware import LoggingMiddleware
+from app.middleware.metrics import MetricsMiddleware
+from app.middleware.request_id import RequestIDMiddleware
 
-
-@app.get("/health")
-def health() -> dict[str, str]:
-    return {"status": "ok", "data_status": "synthetic"}
-
-
-@app.get("/api/v1/market/overview", response_model=MarketOverview)
-def get_market_overview() -> MarketOverview:
-    return market_overview()
-
-
-@app.get("/api/v1/screener", response_model=ScreenerResponse)
-def get_screener(min_quality: int = Query(0, ge=0, le=100), sector: str | None = None) -> ScreenerResponse:
-    result = screener()
-    result.results = [row for row in result.results if row.quality_score >= min_quality and (not sector or row.sector.lower() == sector.lower())]
-    return result
-
-
-@app.get("/api/v1/stocks/{ticker}", response_model=StockProfile)
-def get_stock(ticker: str) -> StockProfile:
-    return stock(ticker)
+settings = get_settings()
+setup_logging(log_level=settings.log_level, log_format=settings.log_format)
+logger = get_logger("aegis.main")
 
 
-@app.get("/api/v1/portfolio/risk", response_model=PortfolioRisk)
-def get_portfolio_risk() -> PortfolioRisk:
-    return portfolio_risk()
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    """Application lifecycle management (startup and shutdown events)."""
+    logger.info(
+        f"Starting {settings.app_name} v{settings.app_version} in [{settings.app_env}] mode"
+    )
+
+    # Initialize tables if SQLite (for local/testing zero-config runs)
+    if settings.database_url.startswith("sqlite"):
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        logger.info("SQLite local database schemas initialized")
+
+    # Verify database connectivity
+    db_alive = await check_db_connectivity()
+    if db_alive:
+        logger.info("Database connectivity established successfully")
+        # Automatically seed flagship universe for local / demo runs
+        try:
+            from app.db.session import AsyncSessionLocal
+            from app.services.seed_service import seed_financial_database
+            async with AsyncSessionLocal() as session:
+                await seed_financial_database(session)
+        except Exception as seed_err:
+            logger.warning(f"Database seeding skipped or encountered non-fatal notice: {seed_err}")
+    else:
+        logger.warning("Database connection is not currently responding")
+
+    yield
+
+    # Clean shutdown
+    logger.info(f"Shutting down {settings.app_name}...")
+    await engine.dispose()
+    logger.info("Database connection pool disposed cleanly")
+
+
+def create_application() -> FastAPI:
+    """Factory creating and configuring the FastAPI application instance."""
+    app = FastAPI(
+        title="AEGIS INVEST API",
+        description=(
+            "Production-oriented financial investment decision-intelligence API foundation. "
+            "Engineered for high reliability, strict data integrity, and modular quant research."
+        ),
+        version=settings.app_version,
+        docs_url="/docs",
+        redoc_url="/redoc",
+        openapi_url="/openapi.json",
+        lifespan=lifespan,
+    )
+
+    # 1. Register Middlewares (order matters: executed outer-to-inner)
+    app.add_middleware(MetricsMiddleware)
+    app.add_middleware(LoggingMiddleware)
+    app.add_middleware(SecurityHeadersMiddleware)
+    app.add_middleware(RequestIDMiddleware)
+    configure_cors(app, settings.parsed_cors_origins)
+
+    # 2. Register Exception Handlers
+    register_exception_handlers(app, is_production=settings.is_production)
+
+    # 3. Mount Versioned API Routers
+    app.include_router(api_v1_router, prefix=settings.api_v1_prefix)
+
+    # 4. Root Route
+    @app.get("/", tags=["Root"], include_in_schema=False)
+    async def root_redirect() -> JSONResponse:
+        return JSONResponse({
+            "service": settings.app_name,
+            "version": settings.app_version,
+            "environment": settings.app_env,
+            "docs": "/docs",
+            "api_v1": settings.api_v1_prefix,
+        })
+
+    return app
+
+
+app = create_application()
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(
+        "app.main:app",
+        host=settings.api_host,
+        port=settings.api_port,
+        reload=settings.debug,
+    )
